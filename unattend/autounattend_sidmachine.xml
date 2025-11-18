@@ -10,7 +10,7 @@
                 </ProductKey>
                 <AcceptEula>true</AcceptEula>
             </UserData>
-            <UseConfigurationSet>false</UseConfigurationSet>
+            <UseConfigurationSet>true</UseConfigurationSet>
         </component>
     </settings>
     <settings pass="specialize">
