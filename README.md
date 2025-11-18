@@ -36,6 +36,15 @@ Do I really have to do it manually?
 -----------------------------------
 Of course not! See my [autounattend.xml](unattend/autounattend_sidmachine.xml)
 
+
+\
+Why my *USER* SID has RID 1002 ?
+-------------------------
+Hey! I followed the manual steps and the user created by OOBE has RID 1002 (and not 1001 like during a normal setup).
+\
+I got you covered -> use an [autounattend](https://github.com/davidedg/CloneWindowsIdentity#do-i-really-have-to-do-it-manually) file (either the minimal one I shared, or you can also add users there)
+
+
 \
 Credits:
 --------
