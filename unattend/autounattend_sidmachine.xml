@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+    <!--Initial structure and wrapper script - courtesy of: https://schneegans.de/windows/unattend-generator/ -->
+    <settings pass="windowsPE">
+        <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+            <UILanguage>it-IT</UILanguage>
+        </component>
+        <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+            <ImageInstall>
+                <OSImage>
+                    <InstallFrom>
+                        <MetaData wcm:action="add">
+                            <Key>/IMAGE/INDEX</Key>
+                            <Value>6</Value>
+                        </MetaData>
+                    </InstallFrom>
+                    <InstallTo>
+                        <DiskID>0</DiskID>
+                        <PartitionID>3</PartitionID>
+                    </InstallTo>
+                </OSImage>
+            </ImageInstall>
+            <UserData>
+                <ProductKey>
+                    <Key>2B87N-8KFHP-DKV6R-Y2C8J-PKCKT</Key>
+                    <WillShowUI>OnError</WillShowUI>
+                </ProductKey>
+                <AcceptEula>true</AcceptEula>
+            </UserData>
+            <UseConfigurationSet>false</UseConfigurationSet>
+            <RunSynchronous>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>1</Order>
+                    <Path>cmd.exe /c "&gt;&gt;"X:\diskpart.txt" (echo:SELECT DISK=0&amp;echo:CLEAN&amp;echo:CONVERT GPT&amp;echo:CREATE PARTITION EFI SIZE=300&amp;echo:FORMAT QUICK FS=FAT32 LABEL=^"System^"&amp;echo:ASSIGN LETTER=S&amp;echo:CREATE PARTITION MSR SIZE=16&amp;echo:CREATE PARTITION PRIMARY)"</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>2</Order>
+                    <Path>cmd.exe /c "&gt;&gt;"X:\diskpart.txt" (echo:SHRINK MINIMUM=1000&amp;echo:FORMAT QUICK FS=NTFS LABEL=^"Windows^"&amp;echo:ASSIGN LETTER=W&amp;echo:CREATE PARTITION PRIMARY&amp;echo:FORMAT QUICK FS=NTFS LABEL=^"Recovery^"&amp;echo:ASSIGN LETTER=R)"</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>3</Order>
+                    <Path>cmd.exe /c "&gt;&gt;"X:\diskpart.txt" (echo:SET ID=^"de94bba4-06d1-4d40-a16a-bfd50179d6ac^"&amp;echo:GPT ATTRIBUTES=0x8000000000000001)"</Path>
+                </RunSynchronousCommand>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>4</Order>
+                    <Path>cmd.exe /c "diskpart.exe /s "X:\diskpart.txt" &gt;&gt;"X:\diskpart.log" || ( type "X:\diskpart.log" &amp; echo diskpart encountered an error. &amp; pause &amp; exit /b 1 )"</Path>
+                </RunSynchronousCommand>
+            </RunSynchronous>
+        </component>
+    </settings>
+    <settings pass="specialize">
+        <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+            <RunSynchronous>
+                <RunSynchronousCommand wcm:action="add">
+                    <Order>1</Order>
+                    <Path>powershell.exe -WindowStyle Normal -NoProfile -Command "$xml = [xml]::new(); $xml.Load('C:\Windows\Panther\unattend.xml'); $sb = [scriptblock]::Create( $xml.unattend.Extensions.ExtractScript ); Invoke-Command -ScriptBlock $sb -ArgumentList $xml;"</Path>
+                </RunSynchronousCommand>
+            </RunSynchronous>
+        </component>
+    </settings>
+    <settings pass="auditUser">
+        <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <RunAsynchronous>
+                <RunAsynchronousCommand wcm:action="add">
+                    <Path>powershell.exe -WindowStyle Normal -NoProfile -Command &quot;Get-Content -LiteralPath &apos;C:\Windows\Setup\Scripts\auditUserRunSync.ps1&apos; -Raw | Invoke-Expression;&quot;</Path>
+                    <Order>1</Order>
+                </RunAsynchronousCommand>
+            </RunAsynchronous>
+        </component>
+    </settings>
+    <settings pass="oobeSystem">
+        <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <Reseal>
+                <Mode>Audit</Mode>
+            </Reseal>
+        </component>
+    </settings>
+    <Extensions xmlns="https://schneegans.de/windows/unattend-generator/">
+        <ExtractScript>
+param(
+    [xml] $Document
+);
+
+foreach( $file in $Document.unattend.Extensions.File ) {
+    $path = [System.Environment]::ExpandEnvironmentVariables( $file.GetAttribute( 'path' ) );
+    mkdir -Path( $path | Split-Path -Parent ) -ErrorAction 'SilentlyContinue';
+    $encoding = switch( [System.IO.Path]::GetExtension( $path ) ) {
+        { $_ -in '.ps1', '.xml' } { [System.Text.Encoding]::UTF8; }
+        { $_ -in '.reg', '.vbs', '.js' } { [System.Text.UnicodeEncoding]::new( $false, $true ); }
+        default { [System.Text.Encoding]::Default; }
+    };
+    $bytes = $encoding.GetPreamble() + $encoding.GetBytes( $file.InnerText.Trim() );
+    [System.IO.File]::WriteAllBytes( $path, $bytes );
+}
+		</ExtractScript>
+        <File path="C:\Windows\Setup\Scripts\auditUserRunSync.ps1">
+$scripts = @(
+	{
+		$proc = $null
+		$sw = [Diagnostics.Stopwatch]::StartNew()
+		do {
+			try {
+				$proc = Get-Process -Name "sysprep" -ErrorAction SilentlyContinue
+			} catch { }
+			if ($proc) { break }
+			Start-Sleep -Milliseconds 500
+		} while ($sw.Elapsed.TotalSeconds -lt 180)		
+
+		if (-not $proc) { return }
+
+		try {
+			Stop-Process -Id $proc.Id -Confirm:$false
+			$sw.Restart()
+			do {
+				$stillRunning = 
+				if (-not $(Get-Process -Name "sysprep" -ErrorAction SilentlyContinue)) { break }
+				Start-Sleep -Milliseconds 500
+			} while ($sw.Elapsed.TotalSeconds -lt 30)
+		} catch { }
+
+		Start-Process -Wait -FilePath "$env:windir\System32\sysprep\sysprep.exe" -ArgumentList "/generalize","/oobe","/quit"
+
+		New-ItemProperty -Force -Path "HKLM:\SYSTEM\Setup\SetupCl\PendingRequest" -Name "SidAccountDomainNew" -PropertyType Binary -Value ([byte[]](0x01,0x04,0x00,0x00,0x00,0x00,0x00,0x05,0x15,0x00,0x00,0x00,0x5E,0x4E,0x90,0xFE,0x4A,0xC1,0x06,0x4C,0x79,0xBF,0xA7,0x0C)) | Out-Null
+		# Start-Process -Wait -FilePath reg.exe -ArgumentList 'add','HKLM\SYSTEM\Setup\SetupCl\PendingRequest','/v','SidAccountDomainNew','/t','REG_BINARY','/d','0104000000000005150000005E4E90FE4AC1064C79BFA70C','/f'
+
+		Start-Process -FilePath shutdown.exe -ArgumentList '/r','/f','/t','3' -Wait
+	};
+);
+
+&amp; {
+  [float] $complete = 0;
+  [float] $increment = 100 / $scripts.Count;
+  foreach( $script in $scripts ) {
+    Write-Progress -Activity 'Running scripts to finalize your Windows installation. Do not close this window.' -PercentComplete $complete;
+    '*** Will now execute command &#xAB;{0}&#xBB;.' -f $(
+      $str = $script.ToString().Trim() -replace '\s+', ' ';
+      $max = 100;
+      if( $str.Length -le $max ) {
+        $str;
+      } else {
+        $str.Substring( 0, $max - 1 ) + '&#x2026;';
+      }
+    );
+    $start = [datetime]::Now;
+    &amp; $script;
+    '*** Finished executing command after {0:0} ms.' -f [datetime]::Now.Subtract( $start ).TotalMilliseconds;
+    "`r`n" * 3;
+    $complete += $increment;
+  }
+} *&gt;&amp;1 | Out-String -Stream &gt;&gt; "C:\Windows\Setup\Scripts\auditUserRunSync.log";
+		</File>
+    </Extensions>
+</unattend>
