@@ -83,7 +83,13 @@ $scripts = @(
 			} while ($sw.Elapsed.TotalSeconds -lt 30)
 		} catch { }
 
-		Start-Process -Wait -FilePath "$env:windir\System32\sysprep\sysprep.exe" -ArgumentList "/generalize","/oobe","/quit"
+		# Unattend chaining via Configuration Set - $OEM$\$$\Setup\Scripts\unattend_stage2.xml
+		$unattend2 = Join-Path $env:windir "Setup\Scripts\unattend_stage2.xml"
+		if (Test-Path $unattend2 -PathType Leaf) {
+			Start-Process -Wait -FilePath "$env:windir\System32\sysprep\sysprep.exe" -ArgumentList "/generalize","/unattend:$unattend2","/oobe","/quit"
+		} else {
+			Start-Process -Wait -FilePath "$env:windir\System32\sysprep\sysprep.exe" -ArgumentList "/generalize","/oobe","/quit"
+		}
 
 		New-ItemProperty -Force -Path "HKLM:\SYSTEM\Setup\SetupCl\PendingRequest" -Name "SidAccountDomainNew" -PropertyType Binary -Value ([byte[]](0x01,0x04,0x00,0x00,0x00,0x00,0x00,0x05,0x15,0x00,0x00,0x00,0x5E,0x4E,0x90,0xFE,0x4A,0xC1,0x06,0x4C,0x79,0xBF,0xA7,0x0C)) | Out-Null
 		# Start-Process -Wait -FilePath reg.exe -ArgumentList 'add','HKLM\SYSTEM\Setup\SetupCl\PendingRequest','/v','SidAccountDomainNew','/t','REG_BINARY','/d','0104000000000005150000005E4E90FE4AC1064C79BFA70C','/f'
